@@ -1,8 +1,8 @@
 import uvicorn
 from multiprocessing import cpu_count, freeze_support
 
-def start_server(host="127.0.0.1",
-                 port=5000,
+def start_server(host="0.0.0.0",
+                 port=8000,
                  num_workers=4,
                  loop="asyncio",
                  reload=False):
@@ -15,6 +15,7 @@ def start_server(host="127.0.0.1",
 
 if __name__ == "__main__":
     freeze_support()
-    num_workers = int(cpu_count() * 0.5)
+    # num_workers = int(cpu_count() * 0.5)
+    num_workers = 2
     # uvicorn.run(app=app, host="0.0.0.0", port=8000)
     start_server(num_workers=num_workers)
