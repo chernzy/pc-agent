@@ -14,6 +14,6 @@ def llm_gemma2b_local():
     return tokenizer, model
 
 def llm_glm3_6b_local():
-    tokenizer = AutoTokenizer.from_pretrained("D:\Code\models\chatglm3-6b", trust_remote_code=True)
-    model = AutoModel.from_pretrained("D:\Code\models\chatglm3-6b", trust_remote_code=True).to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained("D:\\Ubuntu\\code\\models\\chatglm3-6b", trust_remote_code=True)
+    model = AutoModel.from_pretrained("D:\\Ubuntu\\code\\models\\chatglm3-6b", trust_remote_code=True).to(device).eval()
     return tokenizer, model

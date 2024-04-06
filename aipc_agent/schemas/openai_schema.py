@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Literal, Union
+import time
 
+# ==================================== gemma 2b ===============================================
+"""
 class Message(BaseModel):
     content: str
     role: str
@@ -62,6 +65,7 @@ class ChatCompletionResponse(BaseModel):
     prompt_filter_results: List[PromptFilterResults]
     system_fingerprint: Optional[str] = None
     usage: Optional[Dict[str, int]] = None
+"""
 
 # ==================================== chatglm3 6b ===============================================
 class FunctionCallResponse(BaseModel):
