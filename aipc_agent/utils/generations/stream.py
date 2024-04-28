@@ -138,4 +138,188 @@ def generate_stream(
                 rfind_start = 0
             output = tokenizer.decode(
                 tmp_output_ids,
+                skip_special_tokens=True,
+                spaces_between_special_tokens=False,
+                clean_up_tokenization_spaces=True,
             )
+
+            ret_logprobs = None
+            if logprobs is not None:
+                ret_logprobs = {
+                    "text_offset": [],
+                    "tokens": [
+                        tokenizer.decode(token)
+                        for token in (output_ids if echo else output_ids[input_echo_len:])
+                    ],
+                    "token_logprobs": token_logprobs if echo else token_logprobs[input_echo_len:],
+                    "top_logprobs": [{}] * len(token_logprobs if echo else token_logprobs[input_echo_len:]),
+                }
+                # compute text_offset
+                curr_pos = 0
+                for text in ret_logprobs["tokens"]:
+                    ret_logprobs["text_offset"].append(curr_pos)
+                    curr_pos += len(text)
+
+            partially_stopped, finish_reason = False, None
+            if stop_str:
+                if isinstance(stop_str, str):
+                    pos = output.rfind(stop_str, rfind_start)
+                    if pos != -1:
+                        output = output[:pos]
+                        stopped = True
+                    else:
+                        partially_stopped = is_partial_stop(output, stop_str)
+                elif isinstance(stop_str, Iterable):
+                    for each_stop in stop_str:
+                        pos = output.rfind(each_stop, rfind_start)
+                        if pos != -1:
+                            output = output[:pos]
+                            stopped = True
+                            if each_stop == "Observation:":
+                                finish_reason = "function_call"
+                            break
+                        else:
+                            partially_stopped = is_partial_stop(output, each_stop)
+                            if partially_stopped:
+                                break
+                else:
+                    raise ValueError("Invalid stop field type.")
+                
+            # prevent yielding partial stop sequnce
+            if (not partially_stopped) and output and output[-1] != "�":
+                delta_text = output[len(previous_text):]
+                previous_text = output
+                yield {
+                    "id": completion_id,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": model_name,
+                    "delta": delta_text,
+                    "text": output,
+                    "logprobs": ret_logprobs,
+                    "finish_reason": finish_reason,
+                    "usage": {
+                        "prompt_tokens": input_echo_len,
+                        "completion_tokens": i,
+                        "total_tokens": input_echo_len + i
+                    }
+                }
+        if stopped:
+            break
+    yield {
+        "id": completion_id,
+        "object": "text_completion",
+        "created": created,
+        "model": model_name,
+        "delta": "",
+        "text": output,
+        "logprobs": ret_logprobs,
+        "finish_reason": "stop",
+        "usage": {
+            "prompt_tokens": input_echo_len,
+            "completion_tokens": i,
+            "total_tokens": input_echo_len + i
+        }
+    }
+
+    # clean
+    del past_key_values, out
+    gc.collect()
+    torch.cuda.empty_cache()
+
+
+@torch.inference_mode()
+def generate_stream_v2(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizer,
+    params: Dict[str, Any]
+):
+    input_ids = params.get("inputs")
+    functions = params.get("functions")
+    model_name = params.get("model", "llm")
+    temperature = float(params.get("temperature", 1.0))
+    repetition_penalty = float(params.get("repetition_penalty", 1.0))
+    top_p = float(params.get("top_p", 1.0))
+    top_k = float(params.get("top_k", 40))
+    max_new_tokens = int(params.get("max_tokens", 256))
+
+    stop_token_ids = params.get("stop_token_ids") or []
+    if tokenizer.eos_token_id not in stop_token_ids:
+        stop_token_ids.append(tokenizer.eos_token_id)
+    stop_strings = params.get("stop", [])
+
+    input_echo_len = len(input_ids)
+    device = model.device
+    generation_kwargs = dict(
+        input_ids=torch.tensor([input_ids], device=device),
+        do_sample=True,
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_new_tokens=max_new_tokens,
+        repetition_penalty=repetition_penalty,
+        pad_token_id=tokenizer.pad_token_id,
+    )
+    if temperature <= 1e-5:
+        generation_kwargs["do_sample"] = False
+        generation_kwargs.pop("top_k")
+
+    streamer = TextIteratorStreamer(
+        tokenizer, timeout=60.0, skip_prompt=True, skip_special_tokens=True
+    )
+    generation_kwargs["streamer"] = streamer
+
+    if "GenerationMixin" not in str(model.generate.__func__):
+        model.generate = MethodType(PreTrainedModel.generate, model)
+    
+    thread = Thread(target=model.generate, kwargs=generation_kwargs)
+    thread.start()
+
+    generated_text, func_call_found = "", False
+    completion_id: str = f"cmpl-{str(uuid.uuid4())}"
+    created: int = int(time.time())
+    previous_text = ""
+
+    for i, new_text in enumerate(streamer):
+        generated_text += new_text
+        if functions:
+            _, func_call_found = apply_stopping_strings(generated_text, ["Observation:"])
+        generated_text, stop_found = apply_stopping_strings(generated_text, stop_strings)
+
+        if generated_text and generated_text[-1] != "�":
+            delta_text = generated_text[len(previous_text):]
+            previous_text = generated_text
+
+            yield {
+                "id": completion_id,
+                "object": "text_completion",
+                "created": created,
+                "model": model_name,
+                "delta": delta_text,
+                "text": generated_text,
+                "logprobs": None,
+                "finish_reason": "function_call" if func_call_found else None,
+                "usage": {
+                    "prompt_tokens": input_echo_len,
+                    "completion_tokens": i,
+                    "total_tokens": input_echo_len + i
+                }
+            }
+        if stop_found:
+            break
+
+    yield {
+        "id": completion_id,
+        "object": "text_completion",
+        "created": created,
+        "model": model_name,
+        "delta": "",
+        "text": generated_text,
+        "logprobs": None,
+        "finish_reason": "stop",
+        "usage": {
+            "prompt_tokens": input_echo_len,
+            "completion_tokens": i,
+            "total_tokens": input_echo_len + i
+        }
+    }
