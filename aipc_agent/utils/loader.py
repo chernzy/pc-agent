@@ -7,6 +7,8 @@ from typing import (
     Any,
 )
 
+import torch
+
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
@@ -61,6 +63,7 @@ def load_model_and_tokenizer(
         low_cpu_mem_usage=True,
         **config_kwargs,
     )
+    print(model, " ---------- baichuan model ---------------")
     patch_model(model)
     model.eval()
 

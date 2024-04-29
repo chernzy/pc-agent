@@ -20,3 +20,4 @@ if __name__ == "__main__":
     num_workers = 1
     # uvicorn.run(app=app, host="0.0.0.0", port=8000)
     start_server(num_workers=num_workers)
+    # start_server()
