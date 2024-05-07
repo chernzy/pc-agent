@@ -1,10 +1,34 @@
-from typing import List
+from typing import List, Optional, Dict, Any, Tuple
+from copy import deepcopy
 
-from openai.types.chat import ChatCompletionMessageParam
+# from openai.types.chat import ChatCompletionMessageParam
+from schemas.openai_completion_params import ChatCompletionMessageParam
 from transformers import PreTrainedTokenizer
 
 from utils.data_process import parse_messages
 from utils.protocol import Role
+
+
+TOOL_DESC = """
+> Tool Name: {tool_name}
+Tool Description: {tool_description}
+
+"""
+
+TOOL_ARGS = """
+- {arg_name}: ({arg_type})
+{arg_description}
+"""
+
+REACT_INSTRUCTION = """
+You are a helpful assistant with access to the following functions. Use them if required.
+
+Edge cases you must handle:
+ - If there are no functions that match the user request, you will respond politely that you cannot help. 
+You have access to the following tools:
+{tools_text}
+"""
+
 
 def build_baichuan_chat_input(
         tokenizer: PreTrainedTokenizer,
@@ -37,7 +61,6 @@ def build_baichuan_chat_input(
         input_tokens.append(196)
 
     return input_tokens[-max_input_tokens:]
-
 
 def check_is_baichuan(model) -> bool:
     return "BaichuanLayer" in getattr(model, "_no_split_modules", [])

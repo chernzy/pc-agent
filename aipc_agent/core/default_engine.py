@@ -1,4 +1,5 @@
 import traceback
+import json
 from abc import ABC
 from typing import (
     Optional,
@@ -13,32 +14,53 @@ from typing import (
 import torch
 from fastapi.responses import JSONResponse
 from loguru import logger
-from openai.types.chat import (
+# from openai.types.chat import (
+#     # ChatCompletionMessage,
+#     # ChatCompletion,
+#     # ChatCompletionChunk,
+#     ChatCompletionMessageParam
+# )
+
+from schemas.openai_completion_params import ChatCompletionMessageParam
+
+from schemas.openai_schema import (
     ChatCompletionMessage,
     ChatCompletion,
-    ChatCompletionChunk,
-    ChatCompletionMessageParam
-)
-from openai.types.chat.chat_completion import Choice
-from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
-from openai.types.chat.chat_completion_chunk import (
+    Choice,
     ChoiceDelta,
     ChoiceDeltaFunctionCall,
-    ChoiceDeltaToolCall
+    ChoiceDeltaToolCall,
+    FunctionCall,
+    ChatCompletionMessageToolCall,
+    Completion,
+    CompletionChoice, 
+    Logprobs,
+    CompletionUsage
 )
-from openai.types.chat.chat_completion_message import FunctionCall
-from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
-from openai.types.completion import Completion
-from openai.types.completion_choice import CompletionChoice, Logprobs
-from openai.types.completion_usage import CompletionUsage
+from schemas.openai_chunk_schema import Choice as ChunkChoice
+from schemas.openai_chunk_schema import ChatCompletionChunk
+
+# from openai.types.chat.chat_completion import Choice
+# from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
+# from openai.types.chat.chat_completion_chunk import (
+#     ChoiceDelta,
+#     ChoiceDeltaFunctionCall,
+#     ChoiceDeltaToolCall
+# )
+# from openai.types.chat.chat_completion_message import FunctionCall
+# from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
+# from openai.types.completion import Completion
+# from openai.types.completion_choice import CompletionChoice, Logprobs
+# from openai.types.completion_usage import CompletionUsage
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 from utils.template import get_prompt_adapter
 from utils.generations import (
     build_baichuan_chat_input,
-    check_is_baichuan
+    check_is_baichuan,
+    generate_stream_v2,
+    generate_stream
 )
-
 from utils.data_process import get_context_length
 from utils.compat import model_validate
 from utils.constants import ErrorCode
@@ -109,7 +131,6 @@ class DefaultEngine(ABC):
                 inputs = self.tokenizer(prompt_or_messages, suffix_first=suffix_first,).input_ids
             else:
                 inputs = self.tokenizer(prompt_or_messages).input_ids
-
             if isinstance(inputs, list):
                 max_src_len = self.context_len - kwargs.get("max_tokens", 256) - 1
                 inputs = inputs[-max_src_len:]
@@ -127,7 +148,7 @@ class DefaultEngine(ABC):
             tools: Optional[List[Dict[str, Any]]] = None,
             **kwargs,
     ) -> Tuple[Union[List[int], Dict[str, Any]], Optional[str]]:
-        if self.prompt_adapter.function_call_available:
+        if self.prompt_adapter.function_call_available and kwargs.get("tool_choice") == "auto":
             messages = self.prompt_adapter.postprocess_messages(
                 messages, functions, tools=tools
             )
@@ -139,7 +160,7 @@ class DefaultEngine(ABC):
                 prompt = self.tokenizer.apply_chat_template(conversation=messages, tokenize=False, add_generation_prompt=True,)
             else:
                 prompt = self.prompt_adapter.apply_chat_template(messages)
-
+            inputs = self.tokenizer(prompt).input_ids
             if isinstance(inputs, list):
                 max_src_len = self.context_len - max_new_tokens - 1
                 inputs = inputs[-max_src_len:]
@@ -176,10 +197,12 @@ class DefaultEngine(ABC):
             max_new_tokens=params.get("max_tokens", 256),
             functions=params.get("functions"),
             tools=params.get("tools"),
+            tool_choice=params.get("tool_choice"),
         )
         params.update(dict(inputs=inputs, prompt=prompt))
 
         try:
+            print(params, " ------------ params ---------")
             for output in self.generate_stream_func(self.model, self.tokenizer, params):
                 output["error_code"] = 0
                 yield output
@@ -218,6 +241,7 @@ class DefaultEngine(ABC):
                 created=output["created"],
                 model=output["model"],
                 object="text_completion",
+                system_fingerprint="fp_baichuan2-7b-fc"
             )
 
     
@@ -271,6 +295,7 @@ class DefaultEngine(ABC):
                     created=_created,
                     model=_model,
                     object="chat.completion.chunk",
+                    system_fingerprint="fp_baichuan2-7b-fc",
                 )
             
             finish_reason = output["finish_reason"]
@@ -301,38 +326,40 @@ class DefaultEngine(ABC):
                 tool_calls = [model_validate(ChoiceDeltaToolCall, function_call)]
                 delta = ChoiceDelta(
                     content=output["delta"],
-                    tool_calls=tool_calls
                 )
             else:
-                delta = ChoiceDelta(content=output["delta"])
+                delta = ChoiceDelta(content=output["delta"], role="assistant")
             
             choice = ChunkChoice(
                 index=0,
                 delta=delta,
                 finish_reason=finish_reason,
-                logprobs=None,
+                # logprobs=None,
             )
             yield ChatCompletionChunk(
                 id=f"chat{_id}",
                 choices=[choice],
                 created=_created,
                 model=_model,
-                object="chat.completion.chunk"
+                object="chat.completion.chunk",
+                system_fingerprint="fp_baichuan2-7b-fc",
             )
 
         if not has_function_call:
             choice = ChunkChoice(
                 index=0,
-                delta=ChoiceDelta(),
+                delta=ChoiceDelta(content="", role="assistant"),
                 finish_reason="stop",
                 logprobs=None
             )
+            
             yield ChatCompletionChunk(
                 id=f"chat{_id}",
                 choices=[choice],
                 created=_created,
                 model=_model,
-                object="chat.completion.chunk"
+                object="chat.completion.chunk",
+                system_fingerprint="fp_baichuan2-7b-fc",
             )
 
     def _create_chat_completion(self, params: Dict[str, Any]) -> Union[ChatCompletion, JSONResponse]:
@@ -360,7 +387,7 @@ class DefaultEngine(ABC):
             message = ChatCompletionMessage(
                 role="assistant",
                 content=last_output["text"],
-                function_call=function_call,
+                tool_calls=function_call,
             )
         elif isinstance(function_call, dict) and "function" in function_call:
             finish_reason = "tool_calls"
@@ -414,12 +441,13 @@ class DefaultEngine(ABC):
     ) -> Union[Iterator[ChatCompletionChunk], ChatCompletion]:
         params = params or {}
         params.update(kwargs)
+        if params.get("tool_choice") == "auto":
+            return self._create_chat_completion(params)
         return (
             self._create_chat_completion_stream(params)
             if params.get("stream", False)
             else self._create_chat_completion(params)
         )
-    
 
     @property
     def stop(self):

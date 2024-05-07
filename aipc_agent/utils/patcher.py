@@ -93,10 +93,12 @@ def _configure_quantization(
         )
         logger.info("Quantizing model to 4 bit.")
 
-    if load_in_8bit or load_in_4bit:
-        config_kwargs["device_map"] = {"": get_current_device()}
-    else:
-        config_kwargs["device_map"] = get_current_device()
+    # if load_in_8bit or load_in_4bit:
+    #     config_kwargs["device_map"] = {"": get_current_device()}
+    # else:
+    #     config_kwargs["device_map"] = get_current_device()
+    # for single device
+    config_kwargs["device"] = get_current_device()
 
 
 def patch_tokenizer(tokenizer: "PreTrainedTokenizer") -> None:
@@ -162,4 +164,5 @@ def get_current_device() -> torch.device:
         device = "cuda:{}".format(os.environ.get("LOCAL_RANK", "0"))
     else:
         device = "cpu"
-    return torch.device(device)
+    # return torch.device(device)
+    return device

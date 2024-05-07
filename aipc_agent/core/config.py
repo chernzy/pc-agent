@@ -57,10 +57,10 @@ class BaseSettings(BaseModel):
         description="Choices are ['llm', 'rag'].",
     )
     # device related
-    device_map: Optional[Union[str, Dict]] = Field(
-        default=get_env("DEVICE_MAP", "auto"),
-        description="Device map to load the model."
-    )
+    # device_map: Optional[Union[str, Dict]] = Field(
+    #     default=get_env("DEVICE_MAP", "auto"),
+    #     description="Device map to load the model."
+    # )
     gpus: Optional[str] = Field(
         default=get_env("GPUS", None),
         description="Specify which gpus to load the model."

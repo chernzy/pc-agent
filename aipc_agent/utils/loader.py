@@ -29,7 +29,7 @@ def load_model_and_tokenizer(
         model_name_or_path: str,
         use_fast_tokenizer: Optional[bool] = False,
         dtype: Optional[str] = None,
-        device_map: Optional[Any] = None,
+        # device_map: Optional[Any] = None,
         load_in_8bit: Optional[bool] = False,
         load_in_4bit: Optional[bool] = False,
         rope_scaling: Optional[str] = None,
@@ -54,16 +54,25 @@ def load_model_and_tokenizer(
         load_in_8bit=load_in_8bit,
     )
 
-    if device_map:
-        config_kwargs["device_map"] = device_map
+    # if device_map:
+    #     config_kwargs["device_map"] = device_map
+    print(config, " ---------- baichuan config ---------------")
+    print("config kwargs", config_kwargs)
 
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     model_name_or_path,
+    #     config=config,
+    #     low_cpu_mem_usage=True,
+    #     **config_kwargs,
+    # )
     model = AutoModelForCausalLM.from_pretrained(
         model_name_or_path,
         config=config,
         low_cpu_mem_usage=True,
-        **config_kwargs,
+        device="cuda:6",
+        load_in_4bit=True,
+        trust_remote_code=True,
     )
-    print(model, " ---------- baichuan model ---------------")
     patch_model(model)
     model.eval()
 

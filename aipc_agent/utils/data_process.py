@@ -1,5 +1,6 @@
 from typing import List, Tuple
-from openai.types.chat import ChatCompletionMessageParam
+# from openai.types.chat import ChatCompletionMessageParam
+from schemas.openai_completion_params import ChatCompletionMessageParam
 from transformers.generation.logits_process import (
     LogitsProcessorList,
     RepetitionPenaltyLogitsProcessor,
@@ -9,6 +10,7 @@ from transformers.generation.logits_process import (
 )
 
 from utils.protocol import Role
+import re
 
 def parse_messages(
         messages: List[ChatCompletionMessageParam], split_role=Role.USER
@@ -84,3 +86,13 @@ def apply_stopping_strings(reply: str, stop_strings: List[str]) -> Tuple[str, bo
             break
 
     return reply, stop_found
+
+
+def extract_function_call(content):
+    # 使用正则表达式匹配<functioncall>和</functioncall>之间的内容
+    match = re.search(r'<functioncall>(.*?)</functioncall>', content, re.DOTALL)
+    if match:
+        # group(1)将返回匹配的括号内的内容
+        return match.group(1)
+    else:
+        return ""

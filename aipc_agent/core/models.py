@@ -58,7 +58,7 @@ def create_hf_llm():
     from utils.loader import load_model_and_tokenizer
 
     include = {
-        "device_map",
+        "device",
         "load_in_8bit",
         "load_in_4bit",
         "dtype",

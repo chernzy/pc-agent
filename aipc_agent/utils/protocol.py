@@ -9,10 +9,16 @@ from typing import (
     TypedDict
 )
 
-from openai.types.chat import (
+# from openai.types.chat import (
+#     ChatCompletionMessageParam,
+#     ChatCompletionToolChoiceOptionParam
+# )
+
+from schemas.openai_completion_params import (
     ChatCompletionMessageParam,
     ChatCompletionToolChoiceOptionParam
 )
+
 from openai.types.chat.completion_create_params import FunctionCall, ResponseFormat
 from openai.types.create_embedding_response import Usage
 from pydantic import BaseModel

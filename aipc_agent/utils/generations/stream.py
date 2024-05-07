@@ -28,6 +28,9 @@ def generate_stream(
 ):
     input_ids = params.get("inputs")
     prompt = params.get("prompt")
+
+    print(prompt, " ------------ prompt ------------")
+
     model_name = params.get("model", "llm")
     temperature = float(params.get("temperature", 1.0))
     repetition_penalty = float(params.get("repetition_penalty", 1.0))
@@ -215,6 +218,7 @@ def generate_stream(
         "text": output,
         "logprobs": ret_logprobs,
         "finish_reason": "stop",
+        "system_fingerprint": "fp_baichuan2-7b-fc",
         "usage": {
             "prompt_tokens": input_echo_len,
             "completion_tokens": i,
@@ -299,6 +303,7 @@ def generate_stream_v2(
                 "text": generated_text,
                 "logprobs": None,
                 "finish_reason": "function_call" if func_call_found else None,
+                "system_fingerprint": "fp_baichuan2-7b-fc",
                 "usage": {
                     "prompt_tokens": input_echo_len,
                     "completion_tokens": i,
@@ -317,6 +322,7 @@ def generate_stream_v2(
         "text": generated_text,
         "logprobs": None,
         "finish_reason": "stop",
+        "system_fingerprint": "fp_baichuan2-7b-fc",
         "usage": {
             "prompt_tokens": input_echo_len,
             "completion_tokens": i,

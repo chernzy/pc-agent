@@ -60,7 +60,31 @@ async def handle_request(
         chat: bool = True,
 ) -> Union[CompletionCreateParams, ChatCompletionCreateParams, JSONResponse]:
     error_check_ret = check_requests(request)
-    pass
+    if error_check_ret is not None:
+        return error_check_ret
+    
+    _stop, _stop_token_ids = [], []
+    if stop is not None:
+        _stop_token_ids = stop.get("token_ids", [])
+        _stop = stop.get("strings", [])
+
+    request.stop = request.stop or []
+    if isinstance(request.stop, str):
+        request.stop = [request.stop]
+
+    if chat and (
+        "qwen" in SETTINGS.model_name.lower()
+        and (request.functions is not None or request.tools is not None)
+    ):
+        request.stop.append("Observation:")
+    request.stop = list(set(_stop + request.stop))
+    request.stop_token_ids = request.stop_token_ids or []
+    request.stop_token_ids = list(set(_stop_token_ids + request.stop_token_ids))
+
+    request.top_p = max(request.top_p, 1e-5)
+    if request.temperature <= 1e-5:
+        request.top_p = 1.0
+    return request
 
 
 def check_requests(request: Union[CompletionCreateParams, ChatCompletionCreateParams]) -> Optional[JSONResponse]:

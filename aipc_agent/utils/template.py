@@ -9,10 +9,12 @@ from typing import (
     Any,
     Tuple,
 )
-
-from openai.types.chat import ChatCompletionMessageParam
+import uuid
+# from openai.types.chat import ChatCompletionMessageParam
+from schemas.openai_completion_params import ChatCompletionMessageParam
 
 from utils.protocol import Role
+from utils.data_process import extract_function_call
 
 
 @lru_cache
@@ -912,6 +914,172 @@ class BaiChuan2Template(BaseTemplate):
         )
 
 
+class BaiChuan2FCTemplate(BaseTemplate):
+
+    name = "baichuan2-fc"
+    allow_models = ["baichuan2"]
+    stop = {
+        "strings": ["<reserved_106>", "<reserved_107>"],
+        "token_ids": [195, 196],
+    }
+    
+    function_call_available = True
+
+    @property
+    def template(self) -> str:
+        """ The output should look something like:
+
+        <reserved_106>{Prompt}<reserved_107>{Answer}<reserved_106>{Prompt}<reserved_107>
+        """
+        return (
+            "{% if messages[0]['role'] == 'system' %}"
+            "{{ messages[0]['content'] }}"
+            "{% else %}"
+            "{{ system_prompt }}"
+            "{% endif %}"
+            "{% for message in messages %}"
+            "{% if message['role'] == 'user' %}"
+            "{{ '<reserved_106>' + message['content'] + '<reserved_107>' }}"
+            "{% elif message['role'] == 'assistant' %}"
+                "{% if message['tool_calls']|length > 0 %}"
+                "{% for func in message['tool_calls'] %}"
+                "{{'<functioncall>{\"name\": ' + func['function']['name'] + ', ' + '\"arguments\":' + func['function']['arguments'] + '}</functioncall>'}}"
+                # "{{'<functioncall>' + func['function']['name'] + '</functioncall>'}}"
+                "{% endfor %}"
+                "{% else %}"
+                "{{ message['content'] }}"
+                "{% endif %}"
+            "{% elif message['role'] == 'tool' %}"
+            "{{'<reserved_106>' + message['content'] + '<reserved_107>'}}"
+            "{% endif %}"
+            "{% endfor %}"
+        )
+    
+    def postprocess_messages(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        functions: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        _messages = messages
+        messages = []
+
+        TOOLS_DESC = """> Tool Name: {tool_name} \n Tool Description: {tool_description} \n Tool Args: """
+        ARGS_DESC = """- {arg_name}: ({arg_type})\n{arg_description}"""
+        FUNCTION_DESC = """
+            You are a helpful assistant with access to the following functions. Use them if required.
+            Edge cases you must handle:
+            - If there are no functions that match the user request, you will respond politely that you cannot help. 
+            You have access to the following tools:
+            {tools_text}
+            """
+        FUNCTION_LIST = """{function_list}"""
+        FORMAT_START = """
+            Use the following format if using a tool:
+            
+            ```
+            <functioncall>{"name": "function_name (one of 
+            """
+        FORMAT_END = """
+            )", "arguments": {"arg_1": "value_1", "arg_1": "value_1", ...} } </functioncall>
+            ```
+            
+            If there is no tool that matches the user request, you will respond politely that you cannot help.
+            """
+        funcs = [t["function"] for t in tools]
+        print(funcs, " ------------ funcs ----------------")
+        if funcs:
+            tools_text = []
+            toolname_text = []
+            for func_info in funcs:
+                tool_name = func_info["name"]
+                toolname_text.append(f'{tool_name}')
+                tool_description = func_info["description"]
+                tool = TOOLS_DESC.format(tool_name=tool_name, tool_description=tool_description)
+                arg_text = []
+                for i in func_info["parameters"].get("properties"):
+                    arg_name = i
+                    arg_type = func_info["parameters"].get("properties").get(i).get("type")
+                    arg_description = func_info["parameters"].get("properties").get(i).get("description")
+                    arg_text.append(ARGS_DESC.format(arg_name=arg_name, arg_type=arg_type, arg_description=arg_description))
+                tool += "\n".join(arg_text)
+                tools_text.append(tool)
+            # toolname_text = ", ".join(toolname_text)
+            tools_text = "\n\n".join(tools_text)
+            function_text = FUNCTION_DESC.format(tools_text=tools_text)
+            function_list_text = FUNCTION_LIST.format(function_list=toolname_text)
+
+        if functions or tools:
+            messages.append(
+                {
+                    "role": Role.SYSTEM,
+                    "content": function_text + FORMAT_START + function_list_text + FORMAT_END
+                }
+            )
+
+        for m in _messages:
+            role, content = m["role"], m["content"]
+            if role in [Role.FUNCTION, Role.TOOL]:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": content,
+                    }
+                )
+            elif role == Role.ASSISTANT:
+                if content is not None:
+                    for response in content.split("<|assistant|>"):
+                        if "\n" in response:
+                            metadata, sub_content = response.split(
+                                "\n", maxsplit=1)
+                        else:
+                            metadata, sub_content = "", response
+                        messages.append(
+                            {
+                                "role": role,
+                                "metadata": metadata,
+                                "content": sub_content.strip()
+                            }
+                        )
+                else:
+                    messages.append(
+                        {
+                            "role": role,
+                            "tool_calls": m["tool_calls"]
+                        }
+                    )
+                    
+
+            else:
+                messages.append(
+                    {
+                        "role": role,
+                        "content": content,
+                    }
+                )
+        print(messages, " ----------- messages -----------")
+        return messages
+    
+    def parse_assistant_response(
+            self, 
+            output: str, 
+            functions: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
+            tools: Optional[List[Dict[str, Any]]] = None,
+            ) -> Tuple[str, Optional[Union[str, Dict[str, Any]]]]:
+        func_name, func_args = "", ""
+        print(output, " ------------ output ---------")
+        if output.startswith("<functioncall>"):
+            output = extract_function_call(output)
+            output_json = json.loads(output)
+            if output_json:
+                func_name = output_json["name"]
+                func_args = output_json["arguments"]
+            return None, {"function": {"name": func_name, "arguments": json.dumps(func_args, ensure_ascii=False)}, "id": f"call_{str(uuid.uuid4())}", "type": "function"}
+        else:
+            return output, None
+
+
+
 class StarChatTemplate(BaseTemplate):
 
     name = "starchat"
@@ -1375,6 +1543,7 @@ register_prompt_adapter(AquilaChatTemplate)
 
 register_prompt_adapter(BaiChuanTemplate)
 register_prompt_adapter(BaiChuan2Template)
+register_prompt_adapter(BaiChuan2FCTemplate)
 register_prompt_adapter(BelleTemplate)
 register_prompt_adapter(BlueLMTemplate)
 
