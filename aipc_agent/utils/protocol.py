@@ -105,7 +105,7 @@ class CompletionCreateParams(BaseModel):
     guided_choice: Optional[List[str]] = None
     guided_grammar: Optional[str] = None
 
-class EmbeddingCreateParam(BaseModel):
+class EmbeddingCreateParams(BaseModel):
     input: Union[str, List[str], List[int], List[List[int]]]
     model: str
     encoding_format: Literal["float", "base64"] = "float"
