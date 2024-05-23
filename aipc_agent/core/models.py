@@ -55,7 +55,7 @@ def create_rag_models():
 
 def create_hf_llm():
     from core.default_engine import DefaultEngine
-    from utils.loader import load_model_and_tokenizer
+    from utils.loader import load_model_and_tokenizer, load_lora_model_and_tokenizer
 
     include = {
         "device",
@@ -67,7 +67,11 @@ def create_hf_llm():
     }
     kwargs = dictify(SETTINGS, include=include)
 
-    model, tokenizer = load_model_and_tokenizer(model_name_or_path=SETTINGS.model_path, **kwargs)
+    if SETTINGS.lora_path:
+        model, tokenizer = load_lora_model_and_tokenizer(model_name_or_path=SETTINGS.model_path, **kwargs)
+        logger.info("Using LoRA model")
+    else:
+        model, tokenizer = load_model_and_tokenizer(model_name_or_path=SETTINGS.model_path, **kwargs)
 
     logger.info("Using default engine")
 

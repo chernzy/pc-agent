@@ -95,6 +95,10 @@ class LLMSettings(BaseModel):
         default=get_env("MODEL_PATH", None),
         description="The path to the model to use for generating completions."
     )
+    lora_path: Optional[str] = Field(
+        default=get_env("LORA_PATH", None),
+        description="The path to the lora model to use for generating completions."
+    )
     dtype: Optional[str] = Field(
         default=get_env("DTYPE", "half"),
         description="Precision dtype."

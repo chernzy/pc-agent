@@ -3,18 +3,22 @@
 
 import pkgutil
 import langchain_community
+import scipy
 
 import os
-os.chdir('D:\\Lucky\\Code\\Python\\aipc-agent\\aipc_agent')
+os.chdir('D:\\Code\\pc-agent\\aipc_agent')
 
 hiddenimports = []
 for _, name, _ in pkgutil.walk_packages(langchain_community.__path__, langchain_community.__name__ + '.'):
     hiddenimports.append(name)
 
+for _, name, _ in pkgutil.walk_packages(scipy.__path__, scipy.__name__ + '.'):
+    hiddenimports.append(name)
+
 
 a = Analysis(
     ['start_server.py'],
-    pathex=['D:\\Lucky\\Code\\Python\\aipc-agent\\aipc_agent'],
+    pathex=['D:\\Code\\pc-agent\\aipc_agent'],
     binaries=[],
     datas=[],
     hiddenimports=['main',] + hiddenimports,
