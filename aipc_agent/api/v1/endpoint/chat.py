@@ -1,6 +1,11 @@
 from functools import partial
 from typing import Iterator
 
+import gc
+import torch
+
+import os
+import subprocess
 import anyio
 from fastapi import (
     APIRouter,
@@ -14,7 +19,8 @@ from sse_starlette import EventSourceResponse
 from starlette.concurrency import run_in_threadpool
 
 from core.default_engine import DefaultEngine
-from core.models import LLM_ENGINE
+# from core.models import LLM_ENGINE, create_hf_llm, del_model
+from core.models import create_hf_llm, del_model
 from utils.compat import dictify
 from utils.protocol import ChatCompletionCreateParams, Role
 from utils.request import (
@@ -25,8 +31,11 @@ from utils.request import (
 
 chat_router = APIRouter(prefix="/chat")
 
+engine = create_hf_llm()
+
 def get_engine():
-    yield LLM_ENGINE
+    yield engine
+
 
 
 @chat_router.post(
@@ -36,8 +45,8 @@ def get_engine():
 async def create_chat_completion(
     request: ChatCompletionCreateParams,
     raw_request: Request,
-    engine: DefaultEngine = Depends(get_engine)
 ):
+    global engine
     if (not request.messages) or request.messages[-1]["role"] == Role.ASSISTANT:
         raise HTTPException(status_code=400, detail="Invalid request")
     
@@ -69,3 +78,19 @@ async def create_chat_completion(
         )
     else:
         return iterator_or_completion
+    
+@chat_router.post("/change_model", status_code=status.HTTP_200_OK)
+async def change_model(request: Request):
+    global engine
+    res = await request.json()
+    del_model()
+    del engine.model
+    del engine.tokenizer
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+        gc.collect()
+    engine = create_hf_llm()
+    return {
+        "code": 200,
+        "msg": "模型切换完成"
+    }
