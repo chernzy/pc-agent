@@ -19,8 +19,7 @@ from sse_starlette import EventSourceResponse
 from starlette.concurrency import run_in_threadpool
 
 from core.default_engine import DefaultEngine
-# from core.models import LLM_ENGINE, create_hf_llm, del_model
-from core.models import create_hf_llm, del_model
+from core.models import create_trtllm_engine
 from models.model_management import ModelManagement
 from utils.sqlite_utils import SqliteSqlalchemy
 from utils.compat import dictify
@@ -33,7 +32,10 @@ from utils.request import (
 
 chat_router = APIRouter(prefix="/chat")
 
-engine = create_hf_llm()
+
+engine = create_trtllm_engine()
+
+print(engine, " ------- trt engine --------")
 
 def get_engine():
     yield engine
@@ -51,7 +53,10 @@ async def create_chat_completion(
     if (not request.messages) or request.messages[-1]["role"] == Role.ASSISTANT:
         raise HTTPException(status_code=400, detail="Invalid request")
     
-    request = await handle_request(request, engine.stop)
+    request = await handle_request(request, {
+            "strings": ["<reserved_106>", "<reserved_107>"],
+            "token_ids": [195, 196],
+        })
     request.max_tokens = request.max_tokens or 1024
 
     params = dictify(request, exclude={"messages"})
@@ -79,29 +84,3 @@ async def create_chat_completion(
         )
     else:
         return iterator_or_completion
-    
-@chat_router.post("/change_model", status_code=status.HTTP_200_OK)
-async def change_model(request: Request):
-    global engine
-    res = await request.json()
-    session = SqliteSqlalchemy().session
-    model_res = session.query(ModelManagement).filter_by(ID=1).first()
-    if model_res is not None:
-        model_res.NAME = res["model_name"]
-        model_res.PATH = res["model_path"]
-        del_model()
-        del engine.model
-        del engine.tokenizer
-        with torch.no_grad():
-            torch.cuda.empty_cache()
-            gc.collect()
-        engine = create_hf_llm(model_res.NAME, model_res.PATH)
-        return {
-            "code": 200,
-            "msg": "模型切换完成"
-        }
-    else:
-        return {
-            "code": 500,
-            "msg": "There's no model to be used"
-        }

@@ -9,11 +9,12 @@ from core.models import (
 prefix = SETTINGS.api_prefix
 
 if EMBEDDING_MODEL is not None:
-    pass
+    from api.v1.endpoint import embeddings
+    app.include_router(embeddings.embedding_router, prefix=prefix, tags=["Embedding"])
+    
+if SETTINGS.engine == "trtllm":
+    from api.v1.endpoint.trtllm_routes import chat_router
+else:
+    from api.v1.endpoint.chat import chat_router
 
-# if LLM_ENGINE is not None:
-#     from api.v1.api import api_router
-#     app.include_router(api_router, prefix=prefix, tags=["Chat Completion"])
-from api.v1.api import api_router
-
-app.include_router(api_router, prefix=prefix, tags=["Chat Completion"])
+app.include_router(chat_router, prefix=prefix, tags=["Chat Completion"])
