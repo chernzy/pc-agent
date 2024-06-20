@@ -6,7 +6,7 @@ from typing import (
     Tuple,
     Any,
 )
-
+from core.config import SETTINGS
 import torch
 
 from transformers import (
@@ -122,7 +122,7 @@ def load_lora_model_and_tokenizer(
         trust_remote_code=True,
     )
 
-    model = PeftModel.from_pretrained(base_model, "D:\Code\models\hanbin_baichuan2-7B-chat-lora")
+    model = PeftModel.from_pretrained(base_model, SETTINGS.lora_path)
 
     patch_model(model)
     model.eval()

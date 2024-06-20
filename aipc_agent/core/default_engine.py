@@ -14,12 +14,6 @@ from typing import (
 import torch
 from fastapi.responses import JSONResponse
 from loguru import logger
-# from openai.types.chat import (
-#     # ChatCompletionMessage,
-#     # ChatCompletion,
-#     # ChatCompletionChunk,
-#     ChatCompletionMessageParam
-# )
 
 from schemas.openai_completion_params import ChatCompletionMessageParam
 
@@ -40,18 +34,6 @@ from schemas.openai_schema import (
 from schemas.openai_chunk_schema import Choice as ChunkChoice
 from schemas.openai_chunk_schema import ChatCompletionChunk
 
-# from openai.types.chat.chat_completion import Choice
-# from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
-# from openai.types.chat.chat_completion_chunk import (
-#     ChoiceDelta,
-#     ChoiceDeltaFunctionCall,
-#     ChoiceDeltaToolCall
-# )
-# from openai.types.chat.chat_completion_message import FunctionCall
-# from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
-# from openai.types.completion import Completion
-# from openai.types.completion_choice import CompletionChoice, Logprobs
-# from openai.types.completion_usage import CompletionUsage
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 from utils.template import get_prompt_adapter
@@ -202,7 +184,6 @@ class DefaultEngine(ABC):
         params.update(dict(inputs=inputs, prompt=prompt))
 
         try:
-            print(params, " ------------ params ---------")
             for output in self.generate_stream_func(self.model, self.tokenizer, params):
                 output["error_code"] = 0
                 yield output
