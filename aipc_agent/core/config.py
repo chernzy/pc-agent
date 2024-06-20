@@ -1,7 +1,7 @@
 import multiprocessing
 import os
 from pathlib import Path
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, List, Union, Callable
 
 import dotenv
 from loguru import logger
@@ -289,6 +289,28 @@ class TGISetting(BaseSettings):
         description="Text Generation Inference Endpoint.",
     )
 
+class TRTSettings(BaseModel):
+    trt_engine_path: Optional[str] = Field(
+        default=get_env("TRT_ENGINE_PATH", None),
+        description="TRT engine path",
+    )
+    trt_engine_name: Optional[str] = Field(
+        default=get_env("TRT_ENGINE_NAME", None),
+        description="TRT engine name",
+    )
+    tokenizer_dir_path: Optional[str] = Field(
+        default=get_env("TOKENIZER_DIR_PATH", None),
+        description="Tokenizer directory path",
+    )
+    max_output_tokens: Optional[int] = Field(
+        default=int(get_env("MAX_OUTPUT_TOKENS", 128)),
+        description="max output tokens",
+    )
+    max_input_tokens: Optional[int] = Field(
+        default=int(get_env("MAX_INPUT_TOKENS", 512)),
+        description="max input tokens",
+    )
+
 
 TEXT_SPLITTER_CONFIG = {
     "ChineseRecursiveTextSplitter": {
@@ -320,6 +342,8 @@ PARENT_CLASSES = [BaseSettings]
 if "llm" in TASKS:
     if ENGINE == "default":
         PARENT_CLASSES.append(LLMSettings)
+    elif ENGINE == "trtllm":
+        PARENT_CLASSES.extend([LLMSettings, TRTSettings])
     elif ENGINE == "vllm":
         PARENT_CLASSES.extend([LLMSettings, VLLMSetting])
     elif ENGINE == "llama.cpp":

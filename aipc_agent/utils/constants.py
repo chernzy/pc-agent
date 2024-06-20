@@ -30,3 +30,26 @@ class ErrorCode(IntEnum):
     GRADIO_STREAM_UNKNOWN_ERROR = 50004
     CONTROLLER_NO_WORKER = 50005
     CONTROLLER_WORKER_TIMEOUT = 50006
+
+DEFAULT_HF_MODEL_DIRS = {
+    'BaichuanForCausalLM': 'baichuan-inc/Baichuan-13B-Chat',
+    'BloomForCausalLM': 'bigscience/bloom-560m',
+    'ChatGLMForCausalLM': 'THUDM/chatglm3-6b',
+    'FalconForCausalLM': 'tiiuae/falcon-rw-1b',
+    'GPTForCausalLM': 'gpt2-medium',
+    'GPTJForCausalLM': 'EleutherAI/gpt-j-6b',
+    'GPTNeoXForCausalLM': 'EleutherAI/gpt-neox-20b',
+    'InternLMForCausalLM': 'internlm/internlm-chat-7b',
+    'LlamaForCausalLM': 'meta-llama/Llama-2-7b-hf',
+    'MPTForCausalLM': 'mosaicml/mpt-7b',
+    'PhiForCausalLM': 'microsoft/phi-2',
+    'OPTForCausalLM': 'facebook/opt-350m',
+    'QWenForCausalLM': 'Qwen/Qwen-7B',
+}
+
+EOS_TOKEN = 2
+PAD_TOKEN = 2
+
+DEFAULT_CONTEXT_WINDOW = 3900
+DEFAULT_NUM_OUTPUTS = 256
+BOS, EOS = "<s>", "</s>"
