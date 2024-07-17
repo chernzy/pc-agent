@@ -20,5 +20,5 @@ win_service.bat
 
 qwen:
 ```
-aipc_agent/utils/protocol.py, ChatCompletionCreateParams 增加参数 functions
+aipc_agent/utils/protocol.py, ChatCompletionCreateParams增加参数 functions
 ```
