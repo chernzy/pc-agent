@@ -17,3 +17,8 @@ pyinstaller win_service.spec --noconfirm
 # run the bat
 win_service.bat
 ```
+
+qwen:
+```
+aipc_agent/utils/protocol.py, ChatCompletionCreateParams 增加参数 functions
+```

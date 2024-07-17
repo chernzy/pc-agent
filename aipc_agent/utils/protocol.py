@@ -41,6 +41,7 @@ class ChatCompletionCreateParams(BaseModel):
     frequency_penalty: Optional[float] = 0.
     tool_choice: Optional[ChatCompletionToolChoiceOptionParam] = "none"
     tools: Optional[List] = None
+    functions: Optional[List] = None
     logit_bias: Optional[Dict[str, int]] = None
     logprobs: Optional[bool] = False
     max_tokens: Optional[int] = None
